@@ -9,19 +9,33 @@ import std.process;
 
 void main(string[] args){
   string file_name;
+  size_t BATCH_SIZE = 1000;
 
   getopt(args,
     "file"    , &file_name,
+    "batch"   , &BATCH_SIZE
   );
 
   writeln("Processing file => ", file_name);
 
-  File file = File(file_name);
-  //auto pipe = pipeShell("gunzip -c " ~ file_name);
-  //File file = pipe.stdout;
+  File file;
+
+  if(file_name[$-2..$] == "gz"){
+    auto pipe = pipeShell("gunzip -c " ~ file_name);
+    file = pipe.stdout;
+  }
+  else{
+    file = File(file_name);
+  }
 
   size_t index;
   int size = 0;
+
+  size_t write_index = 0;
+  string out_file_name = "out." ~ to!string(write_index) ~ ".bimbam";
+  File outfile = File(out_file_name, "w");
+
+  size_t batch_index;
   foreach(line; file.byLine){
     auto tokens = line.split("\t");
     if(tokens.length == 0 || tokens.length < 6){continue;}
@@ -36,14 +50,14 @@ void main(string[] args){
     auto filter = to!string(tokens[6]);
     auto info = tokens[7].split(";");
 
-    writeln("chrom => ", chrom);
-    writeln("pos=> " , pos);
-    //writeln("ids => ", ids);
-    writeln("id => ", id);
-    writeln("reference => ", reference);
-    writeln("alternate => ", alternate);
-    writeln("qual => ", qual);
-    writeln("filter => ", filter);
+    outfile.write("chrom => ", chrom);
+    outfile.write("pos=> " , pos);
+    //outfile.write("ids => ", ids);
+    outfile.write("id => ", id);
+    outfile.write("reference => ", reference);
+    outfile.write("alternate => ", alternate);
+    outfile.write("qual => ", qual);
+    outfile.write("filter => ", filter);
 
     double[string] map_info_to_val;
     foreach(item; info){
@@ -59,13 +73,13 @@ void main(string[] args){
       }
       map_info_to_val[to!string(dict[0])] = value;
     }
-    writeln("info =>", map_info_to_val);
+    outfile.write("info =>", map_info_to_val);
 
     auto format = tokens[8].split(":");
 
 
-    writeln("format => ", format);
-    writeln("samples => ");
+    outfile.write("format => ", format);
+    outfile.write("samples => ");
     foreach(sample; tokens[9..$]){
       string[string] sample_store;
       auto sample_vals = sample.split(":");
@@ -74,10 +88,16 @@ void main(string[] args){
         sample_store[to!string(key)] = to!string(sample_vals[index]);
         index2++;
       }
-      writeln(sample_store);
+      outfile.write(sample_store);
     }
-    writeln("=================================");
-
+    outfile.write("=================================");
+    batch_index++;
+    if(batch_index % BATCH_SIZE == 0){
+      batch_index = 0;
+      write_index++;
+      out_file_name = "out." ~ to!string(write_index) ~ ".bimbam";
+      outfile = File(out_file_name, "w");
+    }
   }
 
 }
