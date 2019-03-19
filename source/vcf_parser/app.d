@@ -6,6 +6,11 @@ import std.random;
 import std.conv;
 import std.string;
 import std.process;
+import std.exception;
+
+static class QualNotNumeric : Expcetion {
+  mixin basicExceptionCtors;
+}
 
 void main(string[] args){
   string file_name;
@@ -46,7 +51,12 @@ void main(string[] args){
     auto id = ids[0];
     auto reference = to!string(tokens[3]);
     auto alternate = to!string(tokens[4]);
-    auto qual = to!double(tokens[5]);
+    double qual;
+    try {
+      qual = to!double(tokens[5]);
+    } catch (ConvException e) {
+      throw new QualNotNumeric("QUAL column must only contain numeric data. No symbols or strings.");
+    }
     auto filter = to!string(tokens[6]);
     auto info = tokens[7].split(";");
 
@@ -58,6 +68,7 @@ void main(string[] args){
     outfile.write("alternate => ", alternate);
     outfile.write("qual => ", qual);
     outfile.write("filter => ", filter);
+    outfile.write("\n");
 
     double[string] map_info_to_val;
     foreach(item; info){
