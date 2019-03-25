@@ -1,0 +1,25 @@
+PLINK v1.90b6.7 64-bit (2 Dec 2018)
+Options in effect:
+  --bfile plink2
+  --out test
+  --recode bimbam
+
+Hostname: imac105861
+Working directory: /Users/6rr/GEMMA/vcf-parser/data/gatk_wgs_plink2
+Start time: Sat Mar 23 15:12:46 2019
+
+Random number seed: 1553368366
+8192 MB RAM detected; reserving 4096 MB for main workspace.
+881 variants loaded from .bim file.
+4 people (0 males, 0 females, 4 ambiguous) loaded from .fam.
+Ambiguous sex IDs written to test.nosex .
+Using 1 thread (no multithreaded calculations invoked).
+Before main variant filters, 4 founders and 0 nonfounders present.
+Calculating allele frequencies... done.
+Total genotyping rate is 0.972474.
+881 variants and 4 people pass filters and QC.
+Note: No phenotypes present.
+--recode bimbam to test.recode.geno.txt + test.recode.pheno.txt +
+test.recode.pos.txt ... done.
+
+End time: Sat Mar 23 15:12:46 2019

@@ -1,0 +1,24 @@
+PLINK v2.00a2 64-bit (2 Jan 2019)
+Options in effect:
+  --make-bed
+  --vcf gatk_wgs.vcf
+
+Hostname: imac105861
+Working directory: /Users/6rr/GEMMA/vcf-parser/data
+Start time: Sat Mar 23 13:44:52 2019
+
+Random number seed: 1553363092
+8192 MiB RAM detected; reserving 4096 MiB for main workspace.
+Using up to 4 compute threads.
+--vcf: 881 variants scanned.
+--vcf: plink2-temporary.pgen + plink2-temporary.pvar + plink2-temporary.psam
+written.
+4 samples (0 females, 0 males, 4 ambiguous; 4 founders) loaded from
+plink2-temporary.psam.
+881 variants loaded from plink2-temporary.pvar.
+Note: No phenotype data present.
+Writing plink2.fam ... done.
+Writing plink2.bim ... done.
+Writing plink2.bed ... done.
+
+End time: Sat Mar 23 13:44:52 2019

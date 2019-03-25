@@ -2,14 +2,55 @@ module vcf_parser.main;
 
 import std.getopt;
 import std.stdio;
+import std.array : uninitializedArray;
 import std.random;
 import std.conv;
 import std.string;
 import std.process;
 import std.exception;
 
-static class QualNotNumeric : Expcetion {
+static class QualNotNumeric : Exception {
   mixin basicExceptionCtors;
+}
+
+ulong[string] getvcfcounts(string vcffile) {
+  /*
+  // This is a rudementary non-gnu coreutils dependent
+  // variant counter for vcf files
+  auto f = File(vcffile);
+  size_t c = 0; // count of lines
+  size_t h = 0; // count of # 
+  auto buffer = uninitializedArray!(ubyte[])(1024);
+  foreach (chunk; f.byChunk(buffer)) {
+    foreach(ch; chunk) {
+      if(ch == '\n') {
+        ++c;
+      }
+      if(ch == '#') {
+        ++h;
+      }
+    }
+  }
+
+  size_t vars = c-(h/2)-1;
+  return vars;
+  */
+
+  // This sample and variant counter for vcf files depends on
+  // gnu core utils: grep, awk, wc, and cut
+  auto grep = executeShell("grep ^[^##] " ~ vcffile ~ " | wc -l");
+  auto goutput = strip(grep.output);
+  auto vars = to!ulong(goutput);
+
+  auto countsamps = executeShell("grep \"#CHROM\" " ~ vcffile ~ " | cut -f 10- | awk -F '\t' '{ print NF }'");
+  auto coutput = strip(countsamps.output);
+  auto samps = to!ulong(coutput);
+
+  ulong[string] vcfinfo;
+  vcfinfo["samples"] = samps;
+  vcfinfo["variants"] = vars;
+
+  return vcfinfo;
 }
 
 void main(string[] args){
@@ -22,11 +63,17 @@ void main(string[] args){
   );
 
   writeln("Processing file => ", file_name);
+  auto vcfstats = getvcfcounts(file_name);
+  writeln("Variants in VCF file: " ~ to!string(vcfstats["variants"]));
+  writeln("Samples in VCF file: " ~ to!string(vcfstats["samples"]));
 
   File file;
 
   if(file_name[$-2..$] == "gz"){
     auto pipe = pipeShell("gunzip -c " ~ file_name);
+    // executeShell vs. pipShell?
+    // file below is of type pipe(?), if used want to strip white space
+    // need to be string
     file = pipe.stdout;
   }
   else{
