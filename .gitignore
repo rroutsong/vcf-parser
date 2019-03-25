@@ -22,3 +22,11 @@ docs/
 
 # Code coverage
 *.lst
+
+# Compiled builds
+build
+build
+
+# Output test data
+out.0.bimbam
+
