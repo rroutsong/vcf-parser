@@ -136,6 +136,7 @@ void main(string[] args){
       foreach(sample; tokens[9..$]){
         genofile.write("," ~ sample);
       }
+      genofile.write("\n");
       continue;
     }
 
@@ -152,7 +153,13 @@ void main(string[] args){
 
     // SNP ID validation
     auto ids = tokens[2].split(";");
-    auto id = ids[0];
+    string snp;
+    if (ids[0] == ".") {
+      snp = chrom ~ "_" ~ to!string(pos).idup;
+    } else {
+      snp = to!string(ids[0]);
+    }
+    
     if (ids.length > 1) {
       writeln("Only the first SNP id will be used in SNP position file. Please make sure this is the ID you want.");
     }
@@ -166,15 +173,15 @@ void main(string[] args){
     auto alternate = to!string(tokens[4]); 
 
     // write snp position information
-    snp_pos.write(to!string(id) ~ "," ~ to!string(pos) ~ "," ~ to!string(chrom) ~ "\n");
+    snp_pos.write(to!string(snp) ~ "," ~ to!string(pos) ~ "," ~ to!string(chrom) ~ "\n");
 
     // write snp id to start line of genotype file
-    genofile.write(to!string(id));
+    genofile.write(to!string(snp));
 
     // find GT index
     // TODO: check for presense of GT, if not write NA character for each sample
     auto format = tokens[8].split(":");
-    // TODO: remove this, per VCFv4.2 specification page 5, bottom of the page:
+    // TODO: remove this, per VCFv4.2 specification page 5, bottom of the page, 'GT' is first :
     int gt_index = 0;
 
     foreach(field; format) {
@@ -187,10 +194,9 @@ void main(string[] args){
 
     // Process sample GT data
     foreach(sample; tokens[9..$]) {
-      auto sample_data = sample.split(':')
+      auto sample_data = sample.split(':');
       auto gt_data = sample_data[gt_index].strip();
-      string[string] gt_map;
-      // TODO: address multiple alleles
+      // TODO: address anything above haploid alleles
       if(gt_data.indexOf("/") != -1) {
         if(gt_data == "0/1" || gt_data == "1/0")
           genofile.write(",1");
@@ -198,14 +204,31 @@ void main(string[] args){
           genofile.write(",0");
         else if(gt_data == "1/1")
           genofile.write(",1");
+        else if(gt_data == "./.")
+          genofile.write(",NA");
         else
-          writeln("Genotype(GT) value on line " ~ to!string(line_index) ~ ".\n");
-          throw new MalformattedGTValue("Unphased GT values must be in the form of 0/1, 1/0, 0/0, 1/1.");
-      } else if (gt_data
-
-
-
+          throw new MalformattedGTValue("Genotype(GT) value on line " ~ to!string(line_index) ~ ".\n" ~
+                                        "Unphased GT values must be in the form of ./., 0/1, 1/0, 0/0, or 1/1.");
+      } else if (gt_data.indexOf("|") != -1) {
+        if(gt_data == "0|1" || gt_data == "1|0")       
+          genofile.write(",1");
+        else if(gt_data == "0|0")
+          genofile.write(",0");
+        else if(gt_data == "1|1")
+          genofile.write(",1");
+        else if(gt_data == ".|.")
+          genofile.write(",NA");
+        else
+          throw new MalformattedGTValue("Genotype(GT) value on line " ~ to!string(line_index) ~ ".\n" ~
+                                        "Phased GT values must be in the form of .|., 0|1, 1|0, 0|0, 1|1.");
+      } else {
+        throw new MalformattedGTValue("Genotype(GT) value on line " ~ to!string(line_index) ~ ".\n" ~
+                                      "No appropriate delimter character within GT field.");
+      }
+    }
+  
     // file line index for error reporting
+    genofile.write("\n");
     ++line_index;
 
     // batch processing
