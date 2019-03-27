@@ -9,9 +9,29 @@ import std.string;
 import std.process;
 import std.exception;
 
+// external requirements:
+//  gunzip, grep, wc, cut, awk
+//
+
+// Custom exceptions
+
 static class QualNotNumeric : Exception {
   mixin basicExceptionCtors;
 }
+
+static class BPPOSNotNumeric : Exception {
+  mixin basicExceptionCtors;
+}
+
+static class MisformatVCFLine : Exception {
+  mixin basicExceptionCtors;
+}
+
+static class MalformattedGTValue : Exception {
+  mixin basicExceptionCtors;
+}
+
+// Auxillary functions
 
 ulong[string] getvcfcounts(string vcffile) {
   /*
@@ -53,6 +73,8 @@ ulong[string] getvcfcounts(string vcffile) {
   return vcfinfo;
 }
 
+// Main
+
 void main(string[] args){
   string file_name;
   size_t BATCH_SIZE = 1000;
@@ -71,7 +93,7 @@ void main(string[] args){
 
   if(file_name[$-2..$] == "gz"){
     auto pipe = pipeShell("gunzip -c " ~ file_name);
-    // executeShell vs. pipShell?
+    // executeShell vs. pipeShell?
     // file below is of type pipe(?), if used want to strip white space
     // need to be string
     file = pipe.stdout;
@@ -84,78 +106,115 @@ void main(string[] args){
   int size = 0;
 
   size_t write_index = 0;
-  string out_file_name = "out." ~ to!string(write_index) ~ ".bimbam";
-  File outfile = File(out_file_name, "w");
+  string geno_file_name = "out.geno." ~ to!string(write_index) ~ ".bimbam";
+  string pos_file_name = "out.pos.bimbam";
+
+  // BIMBAM basic genotype format
+  File genofile = File(geno_file_name, "w");
+  genofile.write(to!string(vcfstats["samples"]) ~ "\n");
+  genofile.write(to!string(vcfstats["variants"]) ~ "\n");
+
+  // BIMBAM SNP location file
+  File snp_pos = File(pos_file_name, "w");
 
   size_t batch_index;
+  size_t line_index = 1;
   foreach(line; file.byLine){
     auto tokens = line.split("\t");
-    if(tokens.length == 0 || tokens.length < 6){continue;}
-    if(tokens[0] == "#CHROM"){continue;}
+    if(tokens.length == 0 || tokens.length < 6){
+      if(tokens[0].startsWith("##")) {
+        continue;
+      } else {
+        writeln("File line: " ~ to!string(line_index) ~ "\n");
+        throw new MisformatVCFLine("Header line not commented out properly or misformatted");
+      }
+    }
+    
+    if(tokens[0] == "#CHROM"){
+      // Catch VCF header line
+      genofile.write("IND");
+      foreach(sample; tokens[9..$]){
+        genofile.write("," ~ sample);
+      }
+      continue;
+    }
+
+    // Chromosome/Contig ID
     auto chrom = to!string(tokens[0]);
-    auto pos = to!int(tokens[1]);
+    
+    // Base pair position validation
+    int pos;
+    try {
+      pos = to!int(tokens[1]);
+    } catch (ConvException e) {
+      throw new BPPOSNotNumeric("POS column must only contain integers.");
+    }
+
+    // SNP ID validation
     auto ids = tokens[2].split(";");
     auto id = ids[0];
+    if (ids.length > 1) {
+      writeln("Only the first SNP id will be used in SNP position file. Please make sure this is the ID you want.");
+    }
+
+    // Reference and alterantive alleles
     auto reference = to!string(tokens[3]);
-    auto alternate = to!string(tokens[4]);
-    double qual;
-    try {
-      qual = to!double(tokens[5]);
-    } catch (ConvException e) {
-      throw new QualNotNumeric("QUAL column must only contain numeric data. No symbols or strings.");
-    }
-    auto filter = to!string(tokens[6]);
-    auto info = tokens[7].split(";");
+    /* 
+      TODO: address multiple alternate alleles here:
+        string.indexOf(',', alternate) for multiple allele testing , seperated alleles
+    */
+    auto alternate = to!string(tokens[4]); 
 
-    outfile.write("chrom => ", chrom);
-    outfile.write("pos=> " , pos);
-    //outfile.write("ids => ", ids);
-    outfile.write("id => ", id);
-    outfile.write("reference => ", reference);
-    outfile.write("alternate => ", alternate);
-    outfile.write("qual => ", qual);
-    outfile.write("filter => ", filter);
-    outfile.write("\n");
+    // write snp position information
+    snp_pos.write(to!string(id) ~ "," ~ to!string(pos) ~ "," ~ to!string(chrom) ~ "\n");
 
-    double[string] map_info_to_val;
-    foreach(item; info){
-      auto dict =  item.split("=");
-      double value;
-      if(dict.length == 2){
-        if(dict[1].isNumeric )
-          value = to!double(dict[1]);
-        else                                 // TODO: check for set and missing value;
-          value = 0;
-      }else{
-        value = 0;
-      }
-      map_info_to_val[to!string(dict[0])] = value;
-    }
-    outfile.write("info =>", map_info_to_val);
+    // write snp id to start line of genotype file
+    genofile.write(to!string(id));
 
+    // find GT index
+    // TODO: check for presense of GT, if not write NA character for each sample
     auto format = tokens[8].split(":");
+    // TODO: remove this, per VCFv4.2 specification page 5, bottom of the page:
+    int gt_index = 0;
 
-
-    outfile.write("format => ", format);
-    outfile.write("samples => ");
-    foreach(sample; tokens[9..$]){
-      string[string] sample_store;
-      auto sample_vals = sample.split(":");
-      size_t index2 = 0;
-      foreach(key; format){
-        sample_store[to!string(key)] = to!string(sample_vals[index]);
-        index2++;
+    foreach(field; format) {
+      if(field == "GT") {
+        break;
+      } else {
+        ++gt_index;
       }
-      outfile.write(sample_store);
     }
-    outfile.write("=================================");
+
+    // Process sample GT data
+    foreach(sample; tokens[9..$]) {
+      auto sample_data = sample.split(':')
+      auto gt_data = sample_data[gt_index].strip();
+      string[string] gt_map;
+      // TODO: address multiple alleles
+      if(gt_data.indexOf("/") != -1) {
+        if(gt_data == "0/1" || gt_data == "1/0")
+          genofile.write(",1");
+        else if(gt_data == "0/0")
+          genofile.write(",0");
+        else if(gt_data == "1/1")
+          genofile.write(",1");
+        else
+          writeln("Genotype(GT) value on line " ~ to!string(line_index) ~ ".\n");
+          throw new MalformattedGTValue("Unphased GT values must be in the form of 0/1, 1/0, 0/0, 1/1.");
+      } else if (gt_data
+
+
+
+    // file line index for error reporting
+    ++line_index;
+
+    // batch processing
     batch_index++;
     if(batch_index % BATCH_SIZE == 0){
       batch_index = 0;
-      write_index++;
-      out_file_name = "out." ~ to!string(write_index) ~ ".bimbam";
-      outfile = File(out_file_name, "w");
+      ++write_index;
+      geno_file_name = "out.geno." ~ to!string(write_index) ~ ".bimbam";
+      genofile = File(geno_file_name, "w");
     }
   }
-
 }
