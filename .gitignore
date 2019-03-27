@@ -28,5 +28,4 @@ build
 build/
 
 # Output test data
-out.0.bimbam
-
+*.bimbam
