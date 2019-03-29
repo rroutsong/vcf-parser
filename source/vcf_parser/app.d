@@ -27,10 +27,6 @@ static class MisformatVCFLine : Exception {
   mixin basicExceptionCtors;
 }
 
-static class MalformattedGTValue : Exception {
-  mixin basicExceptionCtors;
-}
-
 // Auxillary functions
 
 ulong[string] getvcfcounts(string vcffile) {
@@ -73,6 +69,31 @@ ulong[string] getvcfcounts(string vcffile) {
   return vcfinfo;
 }
 
+string gt_to_score(string gt) {
+  if(gt.length > 1) {
+    auto gts = gt.split("|");
+    if (count(gts) < 2)
+      gts = gt.split("/");
+
+    if(gts[0] == "." || gts[1] == ".") {
+      return "NA";
+    }
+    int par_one = to!int(gts[0]);
+    int par_two = to!int(gts[1]);
+
+    return to!string(par_one*(par_one+1)/2+par_two);
+  } else if (gt.length == 1) {
+    // haploids
+    return "0";
+  }
+  return "0";
+}
+
+double[][] compute_grm_from_rgm(int[][] rgm) {
+  double[][] grm;
+  return grm;
+}
+
 // Main
 
 void main(string[] args){
@@ -80,6 +101,7 @@ void main(string[] args){
   size_t BATCH_SIZE = 1000;
 
   getopt(args,
+    // TODO: simple BIMBAM vs mean genotype BIMBAM
     "file"    , &file_name,
     "batch"   , &BATCH_SIZE
   );
@@ -93,6 +115,7 @@ void main(string[] args){
 
   if(file_name[$-2..$] == "gz"){
     auto pipe = pipeShell("gunzip -c " ~ file_name);
+    // TODO:
     // executeShell vs. pipeShell?
     // file below is of type pipe(?), if used want to strip white space
     // need to be string
@@ -179,7 +202,6 @@ void main(string[] args){
     genofile.write(to!string(snp));
 
     // find GT index
-    // TODO: check for presense of GT, if not write NA character for each sample
     auto format = tokens[8].split(":");
     // TODO: remove this, per VCFv4.2 specification page 5, bottom of the page, 'GT' is first :
     int gt_index = 0;
@@ -192,39 +214,19 @@ void main(string[] args){
       }
     }
 
+    int[][] raw_genotype_matrix;
+    size_t sample_index = 0;
+    // variant index is (line_index - 1)
+
     // Process sample GT data
     foreach(sample; tokens[9..$]) {
       auto sample_data = sample.split(':');
-      auto gt_data = sample_data[gt_index].strip();
-      // TODO: address anything above haploid alleles
-      if(gt_data.indexOf("/") != -1) {
-        if(gt_data == "0/1" || gt_data == "1/0")
-          genofile.write(",1");
-        else if(gt_data == "0/0")
-          genofile.write(",0");
-        else if(gt_data == "1/1")
-          genofile.write(",1");
-        else if(gt_data == "./.")
-          genofile.write(",NA");
-        else
-          throw new MalformattedGTValue("Genotype(GT) value on line " ~ to!string(line_index) ~ ".\n" ~
-                                        "Unphased GT values must be in the form of ./., 0/1, 1/0, 0/0, or 1/1.");
-      } else if (gt_data.indexOf("|") != -1) {
-        if(gt_data == "0|1" || gt_data == "1|0")       
-          genofile.write(",1");
-        else if(gt_data == "0|0")
-          genofile.write(",0");
-        else if(gt_data == "1|1")
-          genofile.write(",1");
-        else if(gt_data == ".|.")
-          genofile.write(",NA");
-        else
-          throw new MalformattedGTValue("Genotype(GT) value on line " ~ to!string(line_index) ~ ".\n" ~
-                                        "Phased GT values must be in the form of .|., 0|1, 1|0, 0|0, 1|1.");
-      } else {
-        throw new MalformattedGTValue("Genotype(GT) value on line " ~ to!string(line_index) ~ ".\n" ~
-                                      "No appropriate delimter character within GT field.");
-      }
+      auto gt_data = to!string(sample_data[gt_index].strip());
+      auto score = gt_to_score(gt_data);
+
+      raw_genotype_matrix[sample_index][(line_index-1)] = to!int(score);
+
+      genofile.write("," ~ to!string(score));
     }
   
     // file line index for error reporting
