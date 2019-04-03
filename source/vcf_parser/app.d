@@ -7,92 +7,8 @@ import std.random;
 import std.conv;
 import std.string;
 import std.process;
-import std.exception;
 
-// external requirements:
-//  gunzip, grep, wc, cut, awk
-//
-
-// Custom exceptions
-
-static class QualNotNumeric : Exception {
-  mixin basicExceptionCtors;
-}
-
-static class BPPOSNotNumeric : Exception {
-  mixin basicExceptionCtors;
-}
-
-static class MisformatVCFLine : Exception {
-  mixin basicExceptionCtors;
-}
-
-// Auxillary functions
-
-ulong[string] getvcfcounts(string vcffile) {
-  /*
-  // This is a rudementary non-gnu coreutils dependent
-  // variant counter for vcf files
-  auto f = File(vcffile);
-  size_t c = 0; // count of lines
-  size_t h = 0; // count of # 
-  auto buffer = uninitializedArray!(ubyte[])(1024);
-  foreach (chunk; f.byChunk(buffer)) {
-    foreach(ch; chunk) {
-      if(ch == '\n') {
-        ++c;
-      }
-      if(ch == '#') {
-        ++h;
-      }
-    }
-  }
-
-  size_t vars = c-(h/2)-1;
-  return vars;
-  */
-
-  // This sample and variant counter for vcf files depends on
-  // gnu core utils: grep, awk, wc, and cut
-  auto grep = executeShell("grep ^[^##] " ~ vcffile ~ " | wc -l");
-  auto goutput = strip(grep.output);
-  auto vars = to!ulong(goutput);
-
-  auto countsamps = executeShell("grep \"#CHROM\" " ~ vcffile ~ " | cut -f 10- | awk -F '\t' '{ print NF }'");
-  auto coutput = strip(countsamps.output);
-  auto samps = to!ulong(coutput);
-
-  ulong[string] vcfinfo;
-  vcfinfo["samples"] = samps;
-  vcfinfo["variants"] = vars;
-
-  return vcfinfo;
-}
-
-string gt_to_score(string gt) {
-  if(gt.length > 1) {
-    auto gts = gt.split("|");
-    if (count(gts) < 2)
-      gts = gt.split("/");
-
-    if(gts[0] == "." || gts[1] == ".") {
-      return "NA";
-    }
-    int par_one = to!int(gts[0]);
-    int par_two = to!int(gts[1]);
-
-    return to!string(par_one*(par_one+1)/2+par_two);
-  } else if (gt.length == 1) {
-    // haploids
-    return "0";
-  }
-  return "0";
-}
-
-double[][] compute_grm_from_rgm(int[][] rgm) {
-  double[][] grm;
-  return grm;
-}
+import vcf_parser.header;
 
 // Main
 
@@ -142,6 +58,9 @@ void main(string[] args){
 
   size_t batch_index;
   size_t line_index = 1;
+
+  auto raw_genotype_matrix = IntMatrix2D(to!int(vcfstats["variants"]), to!int(vcfstats["samples"]));
+
   foreach(line; file.byLine){
     auto tokens = line.split("\t");
     if(tokens.length == 0 || tokens.length < 6){
@@ -152,9 +71,13 @@ void main(string[] args){
         throw new MisformatVCFLine("Header line not commented out properly or misformatted");
       }
     }
+
     
     if(tokens[0] == "#CHROM"){
       // Catch VCF header line
+      char[][] samples = tokens[9..$];
+      raw_genotype_matrix.setci(samples);
+
       genofile.write("IND");
       foreach(sample; tokens[9..$]){
         genofile.write("," ~ sample);
@@ -214,20 +137,16 @@ void main(string[] args){
       }
     }
 
-    int[][] raw_genotype_matrix;
-    size_t sample_index = 0;
-    // variant index is (line_index - 1)
-
     // Process sample GT data
     foreach(sample; tokens[9..$]) {
       auto sample_data = sample.split(':');
       auto gt_data = to!string(sample_data[gt_index].strip());
       auto score = gt_to_score(gt_data);
 
-      raw_genotype_matrix[sample_index][(line_index-1)] = to!int(score);
-
       genofile.write("," ~ to!string(score));
     }
+
+
   
     // file line index for error reporting
     genofile.write("\n");
@@ -241,5 +160,12 @@ void main(string[] args){
       geno_file_name = "out.geno." ~ to!string(write_index) ~ ".bimbam";
       genofile = File(geno_file_name, "w");
     }
+  }
+
+  auto rgmfields = __traits(allMembers, typeof(raw_genotype_matrix));
+  auto rgmvalues = raw_genotype_matrix.tupleof;
+
+  foreach(rgmindex, value; rgmvalues) {
+    writef("\n%-15s %s", rgmfields[rgmindex], value);
   }
 }
