@@ -124,6 +124,8 @@ void main(string[] args){
     // write snp id to start line of genotype file
     genofile.write(to!string(snp));
 
+    raw_genotype_matrix.setri(to!string(snp));
+
     // find GT index
     auto format = tokens[8].split(":");
     // TODO: remove this, per VCFv4.2 specification page 5, bottom of the page, 'GT' is first :
@@ -138,15 +140,18 @@ void main(string[] args){
     }
 
     // Process sample GT data
+    int[] gtrow;
     foreach(sample; tokens[9..$]) {
       auto sample_data = sample.split(':');
       auto gt_data = to!string(sample_data[gt_index].strip());
       auto score = gt_to_score(gt_data);
 
+      gtrow ~= [to!int(score)];
+
       genofile.write("," ~ to!string(score));
     }
 
-
+    raw_genotype_matrix.setrow(gtrow);
   
     // file line index for error reporting
     genofile.write("\n");

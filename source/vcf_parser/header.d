@@ -69,8 +69,8 @@ struct IntMatrix2D {
     this.cols = c;
   }
 
-  void setrow(int r, int[] vals) {
-  	this.values[r] = vals;
+  void setrow(int[] vals) {
+  	this.values ~= vals;
   }
 
   void setci(char[][] ci) {
@@ -89,7 +89,7 @@ struct IntMatrix2D {
   }
 
   void setri(string ri) {
-  	this.row_ids[row_ids.length] = ri;
+  	this.row_ids ~= [ri];
   }
 }
 
@@ -135,24 +135,24 @@ ulong[string] getvcfcounts(string vcffile) {
   return vcfinfo;
 }
 
-string gt_to_score(string gt) {
+int gt_to_score(string gt) {
   if(gt.length > 1) {
     auto gts = gt.split("|");
     if (count(gts) < 2)
       gts = gt.split("/");
 
     if(gts[0] == "." || gts[1] == ".") {
-      return "NA";
+      return -1;
     }
     int par_one = to!int(gts[0]);
     int par_two = to!int(gts[1]);
 
-    return to!string(par_one*(par_one+1)/2+par_two);
+    return par_one*(par_one+1)/2+par_two;
   } else if (gt.length == 1) {
     // haploids
-    return "0";
+    return 0;
   }
-  return "0";
+  return 0;
 }
 
 FloatMatrix2D compute_grm_from_rgm(IntMatrix2D rgm) {
