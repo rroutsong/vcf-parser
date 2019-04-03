@@ -4,6 +4,8 @@ import std.exception : basicExceptionCtors;
 import std.conv;
 import std.string;
 import std.process;
+import std.stdio;
+import std.math : sqrt;
 
 // Custom exceptions
 
@@ -24,7 +26,8 @@ static class MisformatVCFLine : Exception {
 struct FloatMatrix2D {
   int rows;
   int cols;
-  string[] row_ids;   
+  string[] row_ids;
+  string[] row_allele;  
   string[] col_ids;        
   float[][] values;
 
@@ -33,34 +36,28 @@ struct FloatMatrix2D {
     this.cols = c;
   }
 
-  void setrow(int r, float[] vals) {
-  	this.values[r] = vals;
+  void setrow(float[] vals) {
+  	this.values ~= vals;
   }
 
-  void setci(char[][] ci) {
-    string[] cids;
-    string cid;
-
-    foreach(cidcharr; ci[0..$]) {
-      string current_cid = "";
-      foreach (cich; cidcharr[0..$]) {
-        current_cid ~= cich;
-      }
-      cids[$] = current_cid;
-    }
-
-    this.col_ids = cids;
+  void setci(string[] ci) {
+    this.col_ids = ci;
   }
 
-  void setri(string ri) {
-  	this.row_ids[$] = ri;
+  void setri(string[] ri) {
+  	this.row_ids = ri;
+  }
+
+  void setrallele(string[] ral) {
+    this.row_allele = ral;
   }
 }
 
 struct IntMatrix2D {
   int rows;
   int cols;
-  string[] row_ids;   
+  string[] row_ids;
+  string[] row_allele;   
   string[] col_ids;        
   int[][] values;
 
@@ -90,6 +87,52 @@ struct IntMatrix2D {
 
   void setri(string ri) {
   	this.row_ids ~= [ri];
+  }
+
+  void setrallele(string allelestring) {
+    this.row_allele ~= [allelestring];
+  }
+
+  int[][] getvalues() {
+    return this.values;
+  }
+
+  int[] getrowvaluebyindex(int r) {
+    return this.values[r];
+  }
+
+  string getallelebyrowindex(int r) {
+    return this.row_allele[r];
+  }
+
+  int getrowcount() {
+    return this.rows;
+  }
+
+  int getcolcount() {
+    return this.cols;
+  }
+
+  string[] getrowids() {
+    return this.row_ids;
+  }
+
+  string[] getcolids() {
+    return this.col_ids;
+  }
+
+  float getpj(int col) {
+    float colmean = 0.0;
+    int notmissing = 0;
+
+    foreach (i;0..this.rows) {
+      if(this.values[i][col] != -1) {
+        colmean = colmean + to!float(this.values[i][col]);
+        ++notmissing;
+      }
+    }
+
+    return (colmean/to!float(notmissing))/2;
   }
 }
 
@@ -156,7 +199,48 @@ int gt_to_score(string gt) {
 }
 
 FloatMatrix2D compute_grm_from_rgm(IntMatrix2D rgm) {
-  FloatMatrix2D grm;
+  // calculations based on hail formula:
+  // https://hail.is/docs/0.2/methods/genetics.html#hail.methods.genetic_relatedness_matrix
+  auto grm = FloatMatrix2D(rgm.getrowcount(), rgm.getcolcount());
+  auto rowcount = rgm.getrowcount();
+  auto cids = rgm.getcolids();
+  auto rids = rgm.getrowids();
+
+  grm.setri(rids);
+  grm.setci(cids);
+
+  foreach(i; 0..rowcount) {
+    auto allelestring = rgm.getallelebyrowindex(i);
+    auto rowdata = rgm.getrowvaluebyindex(i);
+    float[] newrowdata;
+
+    foreach(j; 0..rowdata.length) {
+      auto alleles = allelestring.split(':');
+      auto ref_al = alleles[0];
+      float alt_count;
+
+      if(indexOf(alleles[1], ',') == -1) {
+        auto alt_al = alleles[1];
+        alt_count = 1.00;
+      } else {
+        auto alt_al = alleles[1].split(',');
+        alt_count = to!float(alt_al.length);
+      }
+
+      if (rowdata[j] == -1) {
+        newrowdata ~= [0.00];
+      } else {
+        float pj = rgm.getpj(to!int(j));
+        float m = to!float(rowcount);
+        float val_ij = (alt_count-(2*pj))/(sqrt((2*pj)*(1-pj)*m));
+
+        newrowdata ~= [val_ij];
+      }
+    }
+
+    grm.setrow(newrowdata);
+  }
+
   return grm;
 }
 

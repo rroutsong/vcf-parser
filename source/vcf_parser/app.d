@@ -116,7 +116,9 @@ void main(string[] args){
       TODO: address multiple alternate alleles here:
         string.indexOf(',', alternate) for multiple allele testing , seperated alleles
     */
-    auto alternate = to!string(tokens[4]); 
+    auto alternate = to!string(tokens[4]);
+
+    raw_genotype_matrix.setrallele(reference ~ ":" ~ alternate);
 
     // write snp position information
     snp_pos.write(to!string(snp) ~ "," ~ to!string(pos) ~ "," ~ to!string(chrom) ~ "\n");
@@ -146,7 +148,7 @@ void main(string[] args){
       auto gt_data = to!string(sample_data[gt_index].strip());
       auto score = gt_to_score(gt_data);
 
-      gtrow ~= [to!int(score)];
+      gtrow ~= [score];
 
       genofile.write("," ~ to!string(score));
     }
@@ -167,10 +169,12 @@ void main(string[] args){
     }
   }
 
-  auto rgmfields = __traits(allMembers, typeof(raw_genotype_matrix));
-  auto rgmvalues = raw_genotype_matrix.tupleof;
+  auto grm = compute_grm_from_rgm(raw_genotype_matrix);
 
-  foreach(rgmindex, value; rgmvalues) {
-    writef("\n%-15s %s", rgmfields[rgmindex], value);
+  auto grmfields = __traits(allMembers, typeof(grm));
+  auto grmvalues = grm.tupleof;
+
+  foreach(grmindex, value; grmvalues) {
+    writef("\n%-15s %s", grmfields[grmindex], value);
   }
 }
