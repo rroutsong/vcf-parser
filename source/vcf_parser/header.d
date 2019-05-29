@@ -5,6 +5,7 @@ import std.conv;
 import std.string;
 import std.process;
 import std.stdio;
+import std.array : uninitializedArray;
 import std.math : sqrt;
 
 // Custom exceptions
@@ -27,7 +28,7 @@ struct FloatMatrix2D {
   int rows;
   int cols;
   string[] row_ids;
-  string[] row_allele;  
+  string[] allele;  
   string[] col_ids;        
   float[][] values;
 
@@ -49,48 +50,50 @@ struct FloatMatrix2D {
   }
 
   void setrallele(string[] ral) {
-    this.row_allele = ral;
+    this.allele = ral;
   }
 }
 
 struct IntMatrix2D {
   int rows;
   int cols;
+  int current_col;
   string[] row_ids;
-  string[] row_allele;   
-  string[] col_ids;        
-  int[][] values;
+  string[] allele;   
+  string[] col_ids;
+  int[][] values;          
 
   this(int r, int c) {
     this.rows = r;                                
     this.cols = c;
+    this.current_col = 0;
+    this.values = uninitializedArray!(int[][])(r, c);
   }
 
-  void setrow(int[] vals) {
-  	this.values ~= vals;
+  void setcolval(int row, int col, int val) {
+    this.values[row][col] = val;
   }
 
-  void setci(char[][] ci) {
-    string[] cids;
-    string cid;
+  void setri(char[][] ri) {
+    string[] rids;
 
-    foreach(cidcharr; ci[0..$]) {
-      string current_cid = "";
-      foreach (cich; cidcharr[0..$]) {
-        current_cid ~= cich;
+    foreach(ridcharr; ri[0..$]) {
+      string current_rid = "";
+      foreach (rich; ridcharr[0..$]) {
+        current_rid ~= rich;
       }
-      cids ~= [current_cid];
+      rids ~= [current_rid];
     }
 
-  	this.col_ids = cids;
+  	this.row_ids = rids;
   }
 
-  void setri(string ri) {
-  	this.row_ids ~= [ri];
+  void setci(string ci) {
+  	this.col_ids ~= [ci];
   }
 
-  void setrallele(string allelestring) {
-    this.row_allele ~= [allelestring];
+  void setallele(string allelestring) {
+    this.allele ~= [allelestring];
   }
 
   int[][] getvalues() {
@@ -102,7 +105,7 @@ struct IntMatrix2D {
   }
 
   string getallelebyrowindex(int r) {
-    return this.row_allele[r];
+    return this.allele[r];
   }
 
   int getrowcount() {
@@ -121,18 +124,20 @@ struct IntMatrix2D {
     return this.col_ids;
   }
 
-  float getpj(int col) {
-    float colmean = 0.0;
+  float getpj(int row) {
+    float rowmean = 0.0;
     int notmissing = 0;
 
-    foreach (i;0..this.rows) {
-      if(this.values[i][col] != -1) {
-        colmean = colmean + to!float(this.values[i][col]);
+    int[] get_row = this.values[row];
+
+    foreach(var; get_row) {
+      if (var != -1) {
+        rowmean += to!float(var);
         ++notmissing;
       }
     }
 
-    return (colmean/to!float(notmissing))/2;
+    return (rowmean/to!float(notmissing))*0.5;
   }
 }
 
@@ -217,22 +222,18 @@ FloatMatrix2D compute_grm_from_rgm(IntMatrix2D rgm) {
     foreach(j; 0..rowdata.length) {
       auto alleles = allelestring.split(':');
       auto ref_al = alleles[0];
-      float alt_count;
 
-      if(indexOf(alleles[1], ',') == -1) {
-        auto alt_al = alleles[1];
-        alt_count = 1.00;
-      } else {
-        auto alt_al = alleles[1].split(',');
-        alt_count = to!float(alt_al.length);
-      }
-
-      if (rowdata[j] == -1) {
+      if (rowdata[j] < 0) {
         newrowdata ~= [0.00];
       } else {
-        float pj = rgm.getpj(to!int(j));
+        float pj = rgm.getpj(to!int(j)); 
         float m = to!float(rowcount);
-        float val_ij = (alt_count-(2*pj))/(sqrt((2*pj)*(1-pj)*m));
+
+        //                 Cij - 2pj
+        //   grm i,j = ------------------
+        //              sqrt(2pj(1-pj)m)
+
+        float val_ij = (to!float(rowdata[j])-(2*pj))/(sqrt(((2*pj)*(1-pj)*m)));
 
         newrowdata ~= [val_ij];
       }

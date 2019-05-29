@@ -44,22 +44,29 @@ void main(string[] args){
   size_t index;
   int size = 0;
 
-  size_t write_index = 0;
-  string geno_file_name = "out.geno." ~ to!string(write_index) ~ ".bimbam";
-  string pos_file_name = "out.pos.bimbam";
-
   // BIMBAM basic genotype format
-  File genofile = File(geno_file_name, "w");
-  genofile.write(to!string(vcfstats["samples"]) ~ "\n");
-  genofile.write(to!string(vcfstats["variants"]) ~ "\n");
+  /*
+    size_t write_index = 0;
+    string geno_file_name = "out.geno." ~ to!string(write_index) ~ ".bimbam";
+    string pos_file_name = "out.pos.bimbam";        
+  
+    File genofile = File(geno_file_name, "w");
+    genofile.write(to!string(vcfstats["samples"]) ~ "\n");
+    genofile.write(to!string(vcfstats["variants"]) ~ "\n");
+  
 
-  // BIMBAM SNP location file
-  File snp_pos = File(pos_file_name, "w");
+    // BIMBAM SNP location file
+    File snp_pos = File(pos_file_name, "w");
 
-  size_t batch_index;
+    size_t batch_index;
+  */
   size_t line_index = 1;
+  int variant_index = 0;
 
-  auto raw_genotype_matrix = IntMatrix2D(to!int(vcfstats["variants"]), to!int(vcfstats["samples"]));
+  // RGM is n x m matrix
+  // n samples/genotypes/individuals
+  // m bialellic autosomal variants
+  auto raw_genotype_matrix = IntMatrix2D(to!int(vcfstats["samples"]), to!int(vcfstats["variants"]));
 
   foreach(line; file.byLine){
     auto tokens = line.split("\t");
@@ -71,18 +78,20 @@ void main(string[] args){
         throw new MisformatVCFLine("Header line not commented out properly or misformatted");
       }
     }
-
     
     if(tokens[0] == "#CHROM"){
       // Catch VCF header line
       char[][] samples = tokens[9..$];
-      raw_genotype_matrix.setci(samples);
+      raw_genotype_matrix.setri(samples);
 
-      genofile.write("IND");
-      foreach(sample; tokens[9..$]){
-        genofile.write("," ~ sample);
-      }
-      genofile.write("\n");
+      // BASIC BIMBAM
+      /*
+        genofile.write("IND");
+        foreach(sample; tokens[9..$]){
+          genofile.write("," ~ sample);
+        }
+        genofile.write("\n");
+      */
       continue;
     }
 
@@ -118,15 +127,18 @@ void main(string[] args){
     */
     auto alternate = to!string(tokens[4]);
 
-    raw_genotype_matrix.setrallele(reference ~ ":" ~ alternate);
+    raw_genotype_matrix.setallele(reference ~ ":" ~ alternate);
 
-    // write snp position information
-    snp_pos.write(to!string(snp) ~ "," ~ to!string(pos) ~ "," ~ to!string(chrom) ~ "\n");
+    // BASIC BIMBAM
+    /*
+      // write snp position information
+      snp_pos.write(to!string(snp) ~ "," ~ to!string(pos) ~ "," ~ to!string(chrom) ~ "\n");
 
-    // write snp id to start line of genotype file
-    genofile.write(to!string(snp));
+      // write snp id to start line of genotype file
+      genofile.write(to!string(snp));
+    */
 
-    raw_genotype_matrix.setri(to!string(snp));
+    raw_genotype_matrix.setci(to!string(snp));
 
     // find GT index
     auto format = tokens[8].split(":");
@@ -142,39 +154,53 @@ void main(string[] args){
     }
 
     // Process sample GT data
-    int[] gtrow;
+    int samplei = 0;
     foreach(sample; tokens[9..$]) {
       auto sample_data = sample.split(':');
       auto gt_data = to!string(sample_data[gt_index].strip());
-      auto score = gt_to_score(gt_data);
+      int score = gt_to_score(gt_data);
 
-      gtrow ~= [score];
+      raw_genotype_matrix.setcolval(samplei, variant_index, score);
 
-      genofile.write("," ~ to!string(score));
+      // BASIC BIMBAM
+      // genofile.write("," ~ to!string(score));
+      ++samplei;
     }
-
-    raw_genotype_matrix.setrow(gtrow);
-  
-    // file line index for error reporting
-    genofile.write("\n");
+    ++variant_index;
     ++line_index;
 
-    // batch processing
-    batch_index++;
-    if(batch_index % BATCH_SIZE == 0){
-      batch_index = 0;
-      ++write_index;
-      geno_file_name = "out.geno." ~ to!string(write_index) ~ ".bimbam";
-      genofile = File(geno_file_name, "w");
+    // BASIC BIMBAM
+    /*
+      // file line index for error reporting
+      genofile.write("\n");
+
+      // batch processing
+      batch_index++;
+      if(batch_index % BATCH_SIZE == 0){
+        batch_index = 0;
+        ++write_index;
+        geno_file_name = "out.geno." ~ to!string(write_index) ~ ".bimbam";
+        genofile = File(geno_file_name, "w");
+      }
+    */
+  }
+
+  auto rgmfields = __traits(allMembers, typeof(raw_genotype_matrix));
+  auto rgmvalues = raw_genotype_matrix.tupleof;
+
+  foreach(rgmindex, value; rgmvalues) {
+    writef("\n%-15s %s", rgmfields[rgmindex], value);
+  }
+
+  // Imputed mean genotypes matrix
+  /*
+    auto grm = compute_grm_from_rgm(raw_genotype_matrix);
+
+    auto grmfields = __traits(allMembers, typeof(grm));
+    auto grmvalues = grm.tupleof;
+
+    foreach(grmindex, value; grmvalues) {
+      writef("\n%-15s %s", grmfields[grmindex], value);
     }
-  }
-
-  auto grm = compute_grm_from_rgm(raw_genotype_matrix);
-
-  auto grmfields = __traits(allMembers, typeof(grm));
-  auto grmvalues = grm.tupleof;
-
-  foreach(grmindex, value; grmvalues) {
-    writef("\n%-15s %s", grmfields[grmindex], value);
-  }
+  */
 }
