@@ -7,6 +7,9 @@ import std.random;
 import std.conv;
 import std.string;
 import std.process;
+import std.algorithm : canFind;
+// for c exit();
+import core.stdc.stdlib : exit;
 
 import vcf_parser.header;
 
@@ -15,12 +18,30 @@ import vcf_parser.header;
 void main(string[] args){
   string file_name;
   size_t BATCH_SIZE = 1000;
+  bool impute = false;
+  string outname;
 
-  getopt(args,
-    // TODO: simple BIMBAM vs mean genotype BIMBAM
+  // impute flag
+  if (args.canFind("-i")) {
+    impute = true;
+  }
+
+  string[] newargs;
+  foreach(i, a; args) {
+    if (a != "-i") {
+      newargs ~= a;
+    }
+  }
+
+  getopt(newargs,
     "file"    , &file_name,
-    "batch"   , &BATCH_SIZE
+    "batch"   , &BATCH_SIZE,
+    "output"  , &outname
   );
+
+  if(outname == "") {
+    outname = "vcf_csv_out.txt";
+  }
 
   writeln("Processing file => ", file_name);
   auto vcfstats = getvcfcounts(file_name);
@@ -185,12 +206,27 @@ void main(string[] args){
     */
   }
 
+  // if impute flag, do impute here:
+  if (impute) {
+    raw_genotype_matrix = raw_genotype_matrix.impute_genotypes();
+    writeln("Imputing genotypes...\n");
+  }
+
+  string outcsvstr = raw_genotype_matrix.to_csv(file_name);
+  
+  File csv_out = File(outname, "w");
+  csv_out.write(outcsvstr);
+  csv_out.close();
+
+  // Print rgm matrix
+  /*
   auto rgmfields = __traits(allMembers, typeof(raw_genotype_matrix));
   auto rgmvalues = raw_genotype_matrix.tupleof;
 
   foreach(rgmindex, value; rgmvalues) {
     writef("\n%-15s %s", rgmfields[rgmindex], value);
   }
+  */
 
   // Imputed mean genotypes matrix
   /*

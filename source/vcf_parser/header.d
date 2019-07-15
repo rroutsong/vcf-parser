@@ -5,8 +5,9 @@ import std.conv;
 import std.string;
 import std.process;
 import std.stdio;
+import std.path;
 import std.array : uninitializedArray;
-import std.math : sqrt;
+import std.math : sqrt, floor;
 
 // Custom exceptions
 
@@ -138,6 +139,59 @@ struct IntMatrix2D {
     }
 
     return (rowmean/to!float(notmissing))*0.5;
+  }
+
+  IntMatrix2D impute_genotypes() {
+    foreach(col; 0..this.cols) {
+      float rowmean = 0.0;
+      int rowdem = 0;
+
+      foreach(row; 0..this.rows) {
+        if (row != -1) {
+         rowmean += to!float(this.values[row][col]);
+         ++rowdem;
+        }
+      }
+      rowmean = rowmean/to!float(rowdem);
+      rowmean = floor(rowmean);
+
+      foreach(row; 0..this.rows) {
+        if(this.values[row][col] == -1) {
+          this.values[row][col] = to!int(rowmean);
+        }
+      }
+    }
+
+    return this;
+  }
+
+  string to_csv(string vcffile) {
+    string csv;
+    // csv header line
+    csv = "# This file was created from " ~ baseName(vcffile) ~ "\n";
+    csv = csv ~ "# nrow " ~ to!string(this.cols) ~ "\n";
+    csv = csv ~ "# ncol " ~ to!string(this.rows) ~ "\n";
+    csv = csv ~ "ids";
+
+    foreach(snp; this.row_ids) {
+      csv = csv ~ "," ~ snp;
+    }
+
+    csv = csv ~ "\n";
+
+    foreach(col; 0..this.cols) {
+      csv = csv ~ this.col_ids[col];
+      foreach(row; 0..this.rows) {
+        if (this.values[row][col] == -1) {
+          csv = csv ~ ",NA";
+        } else {
+          csv = csv ~ "," ~ to!string(this.values[row][col]);
+        }
+      }
+      csv = csv ~ "\n";
+    }
+
+    return csv;
   }
 }
 
