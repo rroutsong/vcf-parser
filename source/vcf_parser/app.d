@@ -212,11 +212,11 @@ void main(string[] args){
     writeln("Imputing genotypes...\n");
   }
 
-  string outcsvstr = raw_genotype_matrix.to_csv(file_name);
-  
-  File csv_out = File(outname, "w");
-  csv_out.write(outcsvstr);
-  csv_out.close();
+  if (raw_genotype_matrix.to_csv(file_name, outname)) {
+    writeln("VCF successfully converted to CSV: " ~ outname);
+  } else {
+    writeln("Failed to write csv file: " ~ outname);
+  }
 
   // Print rgm matrix
   /*

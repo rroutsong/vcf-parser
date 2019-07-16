@@ -165,33 +165,35 @@ struct IntMatrix2D {
     return this;
   }
 
-  string to_csv(string vcffile) {
-    string csv;
+  bool to_csv(string vcffile, string csvfilename) {
+    File csvfile = File(csvfilename, "w");
     // csv header line
-    csv = "# This file was created from " ~ baseName(vcffile) ~ "\n";
-    csv = csv ~ "# nrow " ~ to!string(this.cols) ~ "\n";
-    csv = csv ~ "# ncol " ~ to!string(this.rows) ~ "\n";
-    csv = csv ~ "ids";
+    csvfile.write("# This file was created from " ~ baseName(vcffile) ~ "\n");
+    csvfile.write("# nrow " ~ to!string(this.cols) ~ "\n");
+    csvfile.write("# ncol " ~ to!string(this.rows) ~ "\n");
+    csvfile.write("ids");
 
     foreach(snp; this.row_ids) {
-      csv = csv ~ "," ~ snp;
+      csvfile.write("," ~ snp);
     }
 
-    csv = csv ~ "\n";
+    csvfile.write("\n");
 
     foreach(col; 0..this.cols) {
-      csv = csv ~ this.col_ids[col];
+      csvfile.write(this.col_ids[col]);
       foreach(row; 0..this.rows) {
         if (this.values[row][col] == -1) {
-          csv = csv ~ ",NA";
+          csvfile.write(",NA");
         } else {
-          csv = csv ~ "," ~ to!string(this.values[row][col]);
+          csvfile.write("," ~ to!string(this.values[row][col]));
         }
       }
-      csv = csv ~ "\n";
+      csvfile.write("\n");
     }
 
-    return csv;
+    csvfile.close();
+
+    return true;
   }
 }
 

@@ -30,3 +30,6 @@ build/
 # Output test data
 *.bimbam
 *.txt
+bigtest.txt
+test.txt
+data/All_besc_filter_gtonly.vcf
